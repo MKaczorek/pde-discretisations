@@ -3,3 +3,7 @@ book
 
 # Slides
 *.pdf
+
+# Outputs
+*.png
+*.mp4
