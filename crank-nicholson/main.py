@@ -1,5 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
+import matplotlib.animation as animation
 import scipy
 
 
@@ -147,9 +148,8 @@ def upwind_cn_solve():
     while t < (t_max - dt / 2):
         # Lu_{n+1} = Ru_{n}
         t += dt
-        rhs = Rmat @ un
 
-        un = scipy.linalg.solve(Lmat, rhs)
+        un = scipy.linalg.solve(Lmat, Rmat @ un)
         
         if t >= dump_t - 1e-12:
             dump(x, un, t, d_count)
@@ -157,5 +157,63 @@ def upwind_cn_solve():
             d_count += 1
 
 
+def animate_upwind_cn_solve():
+    L = 1
+    n = 100
+    dx = L / n
+    x = np.arange(0., L, dx)
+    un = np.where(x < 0.5, 1, 0)
+    c = 1.
+    a = 1.
+    dt = dx * c / a
+    t_max = 2
+
+    l_col = np.zeros(n)
+    l_col[0] = 1 + c / 2
+    l_col[1] = -c / 2
+
+    r_col = np.zeros(n)
+    r_col[0] = 1 - c / 2
+    r_col[1] = c / 2
+
+    Lmat = scipy.linalg.circulant(l_col)
+    Rmat = scipy.linalg.circulant(r_col)
+
+    fig = plt.figure()
+    line, = plt.plot(x, un)
+
+    plt.ylim(-0.1, 1.1)
+    plt.xlabel("x")
+    plt.ylabel("u")
+    plt.title(f"Advection solution")
+
+    ax = plt.gca()
+
+    def animate(frame_number):
+        nonlocal un
+
+        ax.text(
+            0.5,
+            1.100,
+            f"t={frame_number*dx:.1f}",
+            bbox={'facecolor': 'red', 'alpha': 0.5, 'pad': 5},
+            transform=ax.transAxes,
+            ha="center"
+        )
+
+        un = scipy.linalg.solve(Lmat, Rmat @ un)
+
+        line.set_xdata(x)
+        line.set_ydata(un)
+
+        return line,
+
+    anim = animation.FuncAnimation(fig, animate, frames=int(t_max / dt), blit=True)
+
+    video_writer = animation.FFMpegWriter(fps=24)
+    anim.save("advection_upwind_cn.mp4", writer=video_writer)
+    plt.close()
+
+
 if __name__=='__main__':
-    upwind_cn_solve()
+    animate_upwind_cn_solve()
