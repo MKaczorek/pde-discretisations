@@ -3,14 +3,17 @@ import matplotlib.pyplot as plt
 import scipy
 
 
-def dump(x, u, time, d_count):
+def dump(x, u, time, d_count, method=None):
     plt.figure()
     plt.plot(x, u)
     plt.ylim(-0.1, 1.1)
     plt.xlabel("x")
     plt.ylabel("u")
     plt.title(f"Advection solution at t = {time:.2f}")
-    plt.savefig(f"solution_{d_count:03d}.png")
+    if method is not None:
+        plt.savefig(f"{method}_solution_{d_count:03d}.png")
+    else:
+        plt.savefig(f"solution_{d_count:03d}.png")
     plt.close()
     
 
@@ -53,6 +56,7 @@ def naive_solve():
             d_count += 1
 
 def matfree_solve():
+    from scipy.sparse.linalg import LinearOperator, gmres
 
     L = 1
     n = 100
@@ -68,26 +72,44 @@ def matfree_solve():
     dump_t = 0.
     d_count = 0
 
-    col = np.zeros(n)
-    col[0] = 1
-    col[1] = -c/4
-    col[-1] = c/4
+    # col = np.zeros(n)
+    # col[0] = 1
+    # col[1] = -c/4
+    # col[-1] = c/4
 
-    Lmat = scipy.linalg.circulant(col)
-    L_mat_inv = scipy.linalg.inv(Lmat)
-    Rmat = Lmat.T
+    # Lmat = scipy.linalg.circulant(col)
 
     while t < (t_max - dt / 2):
         # Lu_{n+1} = Ru_{n}
         t += dt
-        un = un - (c/4) * np.roll(un, -1) + (c/4) * np.roll()
 
+        # NOTE: `np.roll` shifts the data in the array to the left/right
+        # but doesn't affect the indices so un_{i+1} is the ith index in `np.roll(un, -1)`
+        # which is the `un` array shifted to the the left
+        rhs = (un 
+              - (c/4) * np.roll(un, -1) # u_{m+1}
+              + (c/4) * np.roll(un, +1) # u_{m-1}
+        )
 
-        lhs = np.roll(L_mat_inv[0, :], 1) 
-        un = scipy.linalg.solve(Lmat, rhs)
+        # un = scipy.linalg.solve(Lmat, rhs)
+
+        def apply_L(v):
+            return (v
+               + (c/4) * np.roll(v, -1) 
+               - (c/4) * np.roll(v, +1) 
+            )
         
+        def matvec(v):
+            # callable that returns the product L@v
+            return apply_L(v)
+        
+        # LinearOperator + action
+        A = LinearOperator((n, n), matvec=matvec)
+        
+        un, _ = gmres(A, rhs)
+
         if t >= dump_t - 1e-12:
-            dump(x, un, t, d_count)
+            dump(x, un, t, d_count, method="matree")
             dump_t += t_dump
             d_count += 1
 
